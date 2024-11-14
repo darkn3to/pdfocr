@@ -1,5 +1,7 @@
 package org.example.app.components;
 
+import org.example.app.services.imageProc;
+
 import java.io.File;
 import java.util.List;
 import java.awt.*;
@@ -20,9 +22,14 @@ import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Component
 public class pdfHandler {
+
+    @Autowired
+    private imageProc process;
+
     public void extractText(String path) throws Exception {
         PDDocument doc = null, newDoc = null;
         int orientation, fontSize;
@@ -51,7 +58,8 @@ public class pdfHandler {
                 PDPage newPage = new PDPage();
                 if (isLandscape) {
                     newPage.setMediaBox(new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth()));
-                } else {
+                } 
+                else {
                     newPage.setMediaBox(PDRectangle.A4);
                 }
                 newDoc.addPage(newPage);
@@ -62,7 +70,10 @@ public class pdfHandler {
                 float scaleX = pageWidth / imageWidth;
                 float scaleY = pageHeight / imageHeight;
 
-                File imageFile = new File("temp_image.png");
+                File imageFile = new File("temp_image_" + i + ".png");
+                //d.d2();
+                process.processImage(image);
+
                 ImageIO.write(image, "png", imageFile);
                 PDImageXObject pdImage = PDImageXObject.createFromFileByContent(imageFile, newDoc);
                 PDPageContentStream contentStream = new PDPageContentStream(newDoc, newPage);
