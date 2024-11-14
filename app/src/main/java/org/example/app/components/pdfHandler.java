@@ -49,6 +49,8 @@ public class pdfHandler {
                 int imageWidth = image.getWidth();
                 int imageHeight = image.getHeight();
 
+                BufferedImage imgCopy = process.processImage(image);
+
                 //String text = inst.doOCR(image);
                 List<Word> words = inst.getWords(image, ITessAPI.TessPageIteratorLevel.RIL_WORD);
 
@@ -72,9 +74,14 @@ public class pdfHandler {
 
                 File imageFile = new File("temp_image_" + i + ".png");
                 //d.d2();
-                process.processImage(image);
+                /*BufferedImage imgCopy = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+                Graphics2D g2d = imgCopy.createGraphics();
+                g2d.drawImage(image, 0, 0, null);
+                g2d.dispose();
+                process.processImage(imgCopy);*/
 
-                ImageIO.write(image, "png", imageFile);
+                //ImageIO.write(image, "png", imageFile);
+                ImageIO.write(imgCopy, "png", imageFile);
                 PDImageXObject pdImage = PDImageXObject.createFromFileByContent(imageFile, newDoc);
                 PDPageContentStream contentStream = new PDPageContentStream(newDoc, newPage);
                 contentStream.drawImage(pdImage, 0, 0, newPage.getMediaBox().getWidth(), newPage.getMediaBox().getHeight());
