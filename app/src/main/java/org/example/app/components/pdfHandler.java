@@ -4,7 +4,6 @@ import org.example.app.services.imageProc;
 
 import java.io.File;
 import java.util.List;
-import java.awt.*;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
