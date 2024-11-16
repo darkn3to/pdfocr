@@ -5,21 +5,23 @@ import org.example.app.services.imageProc;
 import java.io.File;
 import java.util.List;
 import java.awt.*;
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import java.io.IOException;
 
 import net.sourceforge.tess4j.ITessAPI;
 import net.sourceforge.tess4j.Tesseract;
-//import net.sourceforge.tess4j.Word;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -41,7 +43,7 @@ public class pdfHandler {
         float fontSize;
         Document docHocr = null;
         try {
-            doc = PDDocument.load(new File(path));
+            doc = Loader.loadPDF(new File(path));
             System.setProperty("TESSDATA_PREFIX", "C:\\tessdata");
             PDFRenderer renderer = new PDFRenderer(doc);
             Tesseract inst = new Tesseract();
@@ -64,7 +66,7 @@ public class pdfHandler {
                 String hocrData = inst.doOCR(imgCopy);
                 File hOCRdoc = new File("hocr_" + i + ".html");
                 //org.apache.commons.io.FileUtils.writeStringToFile(hOCRdoc, hocrData, "UTF-8");
-                System.out.println("HOCR file created: " + hOCRdoc.getAbsolutePath());
+                //System.out.println("HOCR file created: " + hOCRdoc.getAbsolutePath());
                 //String text = inst.doOCR(image);
                 /*List<Word> words = null;
                 try {
@@ -102,14 +104,15 @@ public class pdfHandler {
                 process.processImage(imgCopy);*/
 
                 File imageFile = new File("temp_image_" + i + ".png");
+                //ImageIO.write(image, "png", imageFile);
                 ImageIO.write(image, "png", imageFile);
-                //ImageIO.write(imgCopy, "png", imageFile);
                 PDImageXObject pdImage = PDImageXObject.createFromFileByContent(imageFile, newDoc);
                 PDPageContentStream contentStream = new PDPageContentStream(newDoc, newPage);
                 contentStream.drawImage(pdImage, 0, 0, newPage.getMediaBox().getWidth(), newPage.getMediaBox().getHeight());
                 contentStream.beginText();
-                contentStream.setFont(PDType1Font.HELVETICA, 12);
-                contentStream.setNonStrokingColor(0, 0, 0); 
+                contentStream.appendRawCommands("3 Tr ");
+                contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                contentStream.setNonStrokingColor(new Color(0, 0, 0)); 
                 
                 docHocr = Jsoup.parse(hocrData);
                 Elements lines = docHocr.select(".ocr_line");
@@ -126,24 +129,7 @@ public class pdfHandler {
                     //String text = line.text();
                     //System.out.println("Line text: " + line.text());
                     fontSize = (Float.parseFloat(xSize));
-                    /*String title = line.attr("title");
-                        
-                        String[] wordToken = title.split(";");
-                        int left, top, right, bottom;
-                        String[] bbox = wordToken[0].replace("bbox ", "").split(" ");
-                        left = Integer.parseInt(bbox[0]);
-                        bottom = Integer.parseInt(bbox[3]);
-
-                    float x = left * scaleX;
-                        float y = (imageHeight - bottom) * scaleY;
-                        fontSize = (fontSize * scaleY);
-                        contentStream.setFont(PDType1Font.HELVETICA, fontSize);
-                        //System.out.println("X: " + x + ", Y: " + y + ", Text: " + text);
-                        contentStream.newLineAtOffset(x, y);
-                        contentStream.showText(text);
-                        contentStream.newLineAtOffset(-x, -y);
                     
-*/
                     Elements words = line.select(".ocrx_word");
                     fontSize = (float) ((fontSize * scaleY) * 0.9);
                     for (Element word : words) {
@@ -152,7 +138,7 @@ public class pdfHandler {
                         String[] wordToken = title.split(";");
                         String[] bbox = wordToken[0].replace("bbox ", "").split(" ");
                         String conf = wordToken[1].replace("x_wconf ", "");
-                        if (Float.parseFloat(conf) < 65.0) {
+                        if (Float.parseFloat(conf) > 60.0) {
                             int left, bottom;
                             left = Integer.parseInt(bbox[0]);
                             bottom = Integer.parseInt(bbox[3]);
@@ -163,8 +149,8 @@ public class pdfHandler {
                             float x = left * scaleX;
                             float y = (imageHeight - bottom) * scaleY;
                         
-                            contentStream.setFont(PDType1Font.HELVETICA, fontSize);
-                            System.out.println("X: " + x + ", Y: " + y + ", Text: " + text);
+                            contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), fontSize);
+                            //System.out.println("X: " + x + ", Y: " + y + ", Text: " + text);
                             contentStream.newLineAtOffset(x, y);
                             contentStream.showText(text);
                             contentStream.newLineAtOffset(-x, -y);
