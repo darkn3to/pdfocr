@@ -28,6 +28,11 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -49,19 +54,40 @@ public class pdfHandler {
     }
 
     public void extractText(String path) throws Exception {
+        long startTime = System.currentTimeMillis();
         PDDocument doc = null, newDoc = null;
+        
+        ExecutorService threads = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+        
         try {
             doc = Loader.loadPDF(new File(path));
             newDoc = new PDDocument();
+            int numPages = doc.getNumberOfPages();
 
-            for (int i = 0; i < doc.getNumberOfPages(); i++) {
+            for (int i = 0; i < numPages; i++) {
                 PDPage page = doc.getPage(i);
+                PDRectangle mb = page.getMediaBox();
+                boolean isLandscape = mb.getWidth() > mb.getHeight();
+
+                PDPage newPage = new PDPage();
+                if (isLandscape) {
+                    newPage.setMediaBox(new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth()));
+                } else {
+                    newPage.setMediaBox(PDRectangle.A4);
+                }
+                newDoc.addPage(newPage);
+            }
+
+            for (int i = 0; i < numPages; i++) {
+                PDPage page = doc.getPage(i);
+                PDPage newPage = newDoc.getPage(i);
                 BufferedImage image = renderPageToImage(doc, i);
                 BufferedImage processedImage = process.processImage(image);
                 String hocrData = performOCR(image);
-                addPageWithText(newDoc, page, image, hocrData, i);
+                addPageWithText(newDoc, newPage, image, hocrData, i);
             }
 
+            System.out.println("Time taken: " + (System.currentTimeMillis() - startTime) + "ms");
             saveDocument(newDoc, path);
         } catch (IOException | TesseractException e) {
             e.printStackTrace();
@@ -81,8 +107,8 @@ public class pdfHandler {
         return inst.doOCR(image);
     }
 
-    private void addPageWithText(PDDocument newDoc, PDPage page, BufferedImage image, String hocrData, int i) throws IOException {
-        PDRectangle mb = page.getMediaBox();
+    private void addPageWithText(PDDocument newDoc, PDPage newPage, BufferedImage image, String hocrData, int i) throws IOException {
+        /*PDRectangle mb = page.getMediaBox();
         boolean isLandscape = mb.getWidth() > mb.getHeight();
 
         PDPage newPage = new PDPage();
@@ -91,7 +117,7 @@ public class pdfHandler {
         } else {
             newPage.setMediaBox(PDRectangle.A4);
         }
-        newDoc.addPage(newPage);
+        newDoc.addPage(newPage);*/
 
         float pageWidth = newPage.getMediaBox().getWidth();
         float pageHeight = newPage.getMediaBox().getHeight();
@@ -129,18 +155,22 @@ public class pdfHandler {
                 String text = word.text();
                 String title = word.attr("title");
                 String[] wordToken = title.split(";");
-                int left, top, right, bottom;
                 String[] bbox = wordToken[0].replace("bbox ", "").split(" ");
-                left = Integer.parseInt(bbox[0]);
-                bottom = Integer.parseInt(bbox[3]);
+                String conf = wordToken[1].replace("x_wconf ", "");
+                if (Float.parseFloat(conf) > 5.0) {
+                    int left, bottom;
 
-                float x = left * scaleX;
-                float y = (image.getHeight() - bottom) * scaleY;
+                    left = Integer.parseInt(bbox[0]);
+                    bottom = Integer.parseInt(bbox[3]);
 
-                contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), fontSize);
-                contentStream.newLineAtOffset(x, y);
-                contentStream.showText(text);
-                contentStream.newLineAtOffset(-x, -y);
+                    float x = left * scaleX;
+                    float y = (image.getHeight() - bottom) * scaleY;
+
+                    contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), fontSize);
+                    contentStream.newLineAtOffset(x, y);
+                    contentStream.showText(text);
+                    contentStream.newLineAtOffset(-x, -y);
+                }
             }
         }
 
