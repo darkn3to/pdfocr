@@ -4,6 +4,7 @@ import org.example.app.services.imageProc;
 
 import java.io.File;
 import java.util.List;
+import java.util.ArrayList;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
@@ -42,6 +43,8 @@ public class pdfHandler {
     @Autowired
     private imageProc process;
 
+    private PDDocument newDoc;
+
     private Tesseract inst;
 
     float fontSize;
@@ -49,19 +52,18 @@ public class pdfHandler {
     public pdfHandler() {
         inst = new Tesseract();
         inst.setDatapath("C:\\tessdata");
-        inst.setLanguage("eng");
         inst.setTessVariable("tessedit_create_hocr", "1");
     }
 
     public void extractText(String path) throws Exception {
         long startTime = System.currentTimeMillis();
-        PDDocument doc = null, newDoc = null;
-        
-        ExecutorService threads = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-        
+        //PDDocument newDoc = null;
+        final PDDocument doc = Loader.loadPDF(new File(path));
+        newDoc = new PDDocument();
+        ExecutorService scheduler = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+        List<Future<Void>> futures = new ArrayList<>();
         try {
-            doc = Loader.loadPDF(new File(path));
-            newDoc = new PDDocument();
+            //newDoc = new PDDocument();
             int numPages = doc.getNumberOfPages();
 
             for (int i = 0; i < numPages; i++) {
@@ -72,27 +74,53 @@ public class pdfHandler {
                 PDPage newPage = new PDPage();
                 if (isLandscape) {
                     newPage.setMediaBox(new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth()));
-                } else {
+                } 
+                else {
                     newPage.setMediaBox(PDRectangle.A4);
                 }
                 newDoc.addPage(newPage);
             }
 
-            for (int i = 0; i < numPages; i++) {
+
+            for (int i = 0; i < doc.getNumberOfPages(); i++) {
+                final int pageIndex = i;
+                pdfHandler handler = new pdfHandler();
+                Future<Void> future = scheduler.submit(() -> {
+                    try {
+                        final PDPage page = doc.getPage(pageIndex);
+                        final PDPage newPage = newDoc.getPage(pageIndex);
+                        final BufferedImage image = renderPageToImage(doc, pageIndex);
+                        //final BufferedImage processedImage = process.processImage(image);
+                        final String hocrData = performOCR(handler.inst, image);
+                        addPageWithText(newPage, image, hocrData, pageIndex);
+                    } 
+                    catch (IOException | TesseractException e) {
+                        e.printStackTrace();
+                    }
+                    return null;
+                });
+                futures.add(future);
+            }
+            /*for (int i = 0; i < numPages; i++) {
                 PDPage page = doc.getPage(i);
                 PDPage newPage = newDoc.getPage(i);
                 BufferedImage image = renderPageToImage(doc, i);
                 BufferedImage processedImage = process.processImage(image);
                 String hocrData = performOCR(image);
                 addPageWithText(newDoc, newPage, image, hocrData, i);
+            }*/
+
+            for (Future<Void> future : futures) {
+                future.get();
             }
 
             System.out.println("Time taken: " + (System.currentTimeMillis() - startTime) + "ms");
             saveDocument(newDoc, path);
-        } catch (IOException | TesseractException e) {
+        } catch (IOException e) {
             e.printStackTrace();
             System.err.println("Failed to process the PDF: " + e.getMessage());
         } finally {
+            scheduler.shutdown();
             closeDocument(doc);
             closeDocument(newDoc);
         }
@@ -103,11 +131,11 @@ public class pdfHandler {
         return renderer.renderImageWithDPI(pageIndex, 300);
     }
 
-    private String performOCR(BufferedImage image) throws TesseractException {
+    private String performOCR(Tesseract inst, BufferedImage image) throws TesseractException {
         return inst.doOCR(image);
     }
 
-    private void addPageWithText(PDDocument newDoc, PDPage newPage, BufferedImage image, String hocrData, int i) throws IOException {
+    private void addPageWithText(PDPage newPage, BufferedImage image, String hocrData, int i) throws IOException {
         /*PDRectangle mb = page.getMediaBox();
         boolean isLandscape = mb.getWidth() > mb.getHeight();
 
@@ -127,55 +155,57 @@ public class pdfHandler {
         File imageFile = new File("temp_image_" + i + ".png");
         //ImageIO.write(image, "png", imageFile);
         ImageIO.write(image, "png", imageFile);
-        PDImageXObject pdImage = PDImageXObject.createFromFileByContent(imageFile, newDoc);
-        PDPageContentStream contentStream = new PDPageContentStream(newDoc, newPage);
-        contentStream.drawImage(pdImage, 0, 0, newPage.getMediaBox().getWidth(), newPage.getMediaBox().getHeight());
-        contentStream.beginText();
-        contentStream.appendRawCommands("3 Tr ");
-        contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
-        contentStream.setNonStrokingColor(new Color(0, 0, 0));
+        synchronized (newDoc) {
+            PDImageXObject pdImage = PDImageXObject.createFromFileByContent(imageFile, newDoc);
+            PDPageContentStream contentStream = new PDPageContentStream(newDoc, newPage);
+            contentStream.drawImage(pdImage, 0, 0, newPage.getMediaBox().getWidth(), newPage.getMediaBox().getHeight());
+            contentStream.beginText();
+            contentStream.appendRawCommands("3 Tr ");
+            contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+            contentStream.setNonStrokingColor(new Color(0, 0, 0));
 
-        Document docHocr = Jsoup.parse(hocrData);
-        Elements lines = docHocr.select(".ocr_line");
-        for (Element line : lines) {
-            String lineTitle = line.attr("title");
-            String[] token = lineTitle.split("; ");
-            String xSize = null;
-            for (String part : token) {
-                if (part.startsWith("x_size")) {
-                    xSize = part.split(" ")[1];
-                    break;
+            Document docHocr = Jsoup.parse(hocrData);
+            Elements lines = docHocr.select(".ocr_line");
+            for (Element line : lines) {
+                String lineTitle = line.attr("title");
+                String[] token = lineTitle.split("; ");
+                String xSize = null;
+                for (String part : token) {
+                    if (part.startsWith("x_size")) {
+                        xSize = part.split(" ")[1];
+                        break;
+                    }
                 }
-            }
 
-            fontSize = (float) ((Float.parseFloat(xSize) * scaleY) * 0.9);
+                fontSize = (float) ((Float.parseFloat(xSize) * scaleY) * 0.95);
 
-            Elements words = line.select(".ocrx_word");
-            for (Element word : words) {
-                String text = word.text();
-                String title = word.attr("title");
-                String[] wordToken = title.split(";");
-                String[] bbox = wordToken[0].replace("bbox ", "").split(" ");
-                String conf = wordToken[1].replace("x_wconf ", "");
-                if (Float.parseFloat(conf) > 5.0) {
-                    int left, bottom;
+                Elements words = line.select(".ocrx_word");
+                for (Element word : words) {
+                    String text = word.text();
+                    String title = word.attr("title");
+                    String[] wordToken = title.split(";");
+                    String[] bbox = wordToken[0].replace("bbox ", "").split(" ");
+                    String conf = wordToken[1].replace("x_wconf ", "");
+                    if (Float.parseFloat(conf) > 5.0) {
+                        int left, bottom;
 
-                    left = Integer.parseInt(bbox[0]);
-                    bottom = Integer.parseInt(bbox[3]);
+                        left = Integer.parseInt(bbox[0]);
+                        bottom = Integer.parseInt(bbox[3]);
 
-                    float x = left * scaleX;
-                    float y = (image.getHeight() - bottom) * scaleY;
+                        float x = left * scaleX;
+                        float y = (image.getHeight() - bottom) * scaleY;
 
-                    contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), fontSize);
-                    contentStream.newLineAtOffset(x, y);
-                    contentStream.showText(text);
-                    contentStream.newLineAtOffset(-x, -y);
+                        contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), fontSize);
+                        contentStream.newLineAtOffset(x, y);
+                        contentStream.showText(text);
+                        contentStream.newLineAtOffset(-x, -y);
                 }
             }
         }
 
         contentStream.endText();
         contentStream.close();
+        }
     }
 
     private void saveDocument(PDDocument doc, String originalPath) throws IOException {
