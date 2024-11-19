@@ -19,17 +19,27 @@ public class pdf_ocr {
     @Bean
     CommandLineRunner run() {
         return args -> {
-            if (args.length >= 1) {
+            if (args.length >= 2) {
                 try {
-                    String filepath = args[0];
-                    demo.extractText(filepath);
+                    String sourcePath = args[0];
+                    String destPath = args[1];
+                    char useMultithreading = 'n'; 
+                    if (args.length == 3) {
+                        useMultithreading = args[2].charAt(0);
+                        if (Character.toLowerCase(useMultithreading) != 'm' && Character.toLowerCase(useMultithreading) != 'n') {
+                            System.out.println("Invalid flag. Please use 'm' for multithreading or 'n' for no multithreading.");
+                            return;
+                        }
+                    }
+                    demo.extractText(sourcePath, destPath, useMultithreading);
                 }
                 catch (Exception e) {
-                    System.out.println("Failed to extract text from the PDF. ");
+                    System.out.println("Failed to extract text from the PDF: " + e.getMessage());
+                    e.printStackTrace();
                 }
             }
             else {
-                System.out.println("Please provide the path to the PDF. ");
+                System.out.println("Please provide a destination path. ");
             }
         };
     }
