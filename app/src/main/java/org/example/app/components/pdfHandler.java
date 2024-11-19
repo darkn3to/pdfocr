@@ -9,6 +9,7 @@ import java.awt.Color;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 
 import net.sourceforge.tess4j.ITessAPI;
 import net.sourceforge.tess4j.Tesseract;
@@ -39,8 +40,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 @Component
 public class pdfHandler {
-
-    @Autowired
+    @Autowired 
     private imageProc process;
 
     private PDDocument newDoc;
@@ -55,15 +55,21 @@ public class pdfHandler {
         inst.setTessVariable("tessedit_create_hocr", "1");
     }
 
-    public void extractText(String path) throws Exception {
+    public void extractText(String path, String destPath, char useMultithreading) throws Exception {
         long startTime = System.currentTimeMillis();
-        //PDDocument newDoc = null;
-        final PDDocument doc = Loader.loadPDF(new File(path));
+        // PDDocument newDoc = null;
+        final PDDocument doc;
+        try {
+            doc = Loader.loadPDF(new File(path));
+        } catch (IOException e) {
+            System.err.println("Failed to load the PDF file: " + e.getMessage());
+            return;
+        }
+
         newDoc = new PDDocument();
         ExecutorService scheduler = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         List<Future<Void>> futures = new ArrayList<>();
         try {
-            //newDoc = new PDDocument();
             int numPages = doc.getNumberOfPages();
 
             for (int i = 0; i < numPages; i++) {
@@ -74,48 +80,57 @@ public class pdfHandler {
                 PDPage newPage = new PDPage();
                 if (isLandscape) {
                     newPage.setMediaBox(new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth()));
-                } 
-                else {
+                } else {
                     newPage.setMediaBox(PDRectangle.A4);
                 }
                 newDoc.addPage(newPage);
             }
 
+            if (useMultithreading == 'm') {
+                System.out.println("Using multithreading to process the PDF. ");
+                for (int i = 0; i < doc.getNumberOfPages(); i++) {
+                    final int pageIndex = i;
+                    pdfHandler handler = new pdfHandler();
+                    Future<Void> future = scheduler.submit(() -> {
+                        try {
+                            final PDPage page = doc.getPage(pageIndex);
+                            final PDPage newPage = newDoc.getPage(pageIndex);
+                            final BufferedImage image = renderPageToImage(doc, pageIndex);
+                            // final BufferedImage processedImage = process.processImage(image);
+                            final String hocrData = performOCR(handler.inst, image);
+                            addPageWithText(newPage, image, hocrData, pageIndex);
+                        } catch (IOException | TesseractException e) {
+                            e.printStackTrace();
+                        }
+                        return null;
+                    });
+                    futures.add(future);
+                }
+                /*for (int i = 0; i < numPages; i++) {
+                    PDPage page = doc.getPage(i);
+                    PDPage newPage = newDoc.getPage(i);
+                    BufferedImage image = renderPageToImage(doc, i);
+                    BufferedImage processedImage = process.processImage(image);
+                    String hocrData = performOCR(image);
+                    addPageWithText(newDoc, newPage, image, hocrData, i);
+                }*/
 
-            for (int i = 0; i < doc.getNumberOfPages(); i++) {
-                final int pageIndex = i;
-                pdfHandler handler = new pdfHandler();
-                Future<Void> future = scheduler.submit(() -> {
-                    try {
-                        final PDPage page = doc.getPage(pageIndex);
-                        final PDPage newPage = newDoc.getPage(pageIndex);
-                        final BufferedImage image = renderPageToImage(doc, pageIndex);
-                        //final BufferedImage processedImage = process.processImage(image);
-                        final String hocrData = performOCR(handler.inst, image);
-                        addPageWithText(newPage, image, hocrData, pageIndex);
-                    } 
-                    catch (IOException | TesseractException e) {
-                        e.printStackTrace();
-                    }
-                    return null;
-                });
-                futures.add(future);
-            }
-            /*for (int i = 0; i < numPages; i++) {
-                PDPage page = doc.getPage(i);
-                PDPage newPage = newDoc.getPage(i);
-                BufferedImage image = renderPageToImage(doc, i);
-                BufferedImage processedImage = process.processImage(image);
-                String hocrData = performOCR(image);
-                addPageWithText(newDoc, newPage, image, hocrData, i);
-            }*/
-
-            for (Future<Void> future : futures) {
-                future.get();
+                for (Future<Void> future : futures) {
+                    future.get();
+                }
+            } else {
+                for (int i = 0; i < numPages; i++) {
+                    PDPage page = doc.getPage(i);
+                    PDPage newPage = newDoc.getPage(i);
+                    BufferedImage image = renderPageToImage(doc, i);
+                    // BufferedImage processedImage = process.processImage(image);
+                    String hocrData = performOCR(inst, image);
+                    addPageWithText(newPage, image, hocrData, i);
+                }
             }
 
             System.out.println("Time taken: " + (System.currentTimeMillis() - startTime) + "ms");
-            saveDocument(newDoc, path);
+            saveDocument(newDoc, path, destPath);
         } catch (IOException e) {
             e.printStackTrace();
             System.err.println("Failed to process the PDF: " + e.getMessage());
@@ -152,11 +167,16 @@ public class pdfHandler {
         float scaleX = pageWidth / image.getWidth();
         float scaleY = pageHeight / image.getHeight();
 
-        File imageFile = new File("temp_image_" + i + ".png");
+        //File imageFile = new File("temp_image_" + i + ".png");
+        // ImageIO.write(image, "png", imageFile);
         //ImageIO.write(image, "png", imageFile);
-        ImageIO.write(image, "png", imageFile);
+        
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", baos);
+        byte[] imageBytes = baos.toByteArray();
+
         synchronized (newDoc) {
-            PDImageXObject pdImage = PDImageXObject.createFromFileByContent(imageFile, newDoc);
+            PDImageXObject pdImage = PDImageXObject.createFromByteArray(newDoc, imageBytes, "temp_image_" + i);
             PDPageContentStream contentStream = new PDPageContentStream(newDoc, newPage);
             contentStream.drawImage(pdImage, 0, 0, newPage.getMediaBox().getWidth(), newPage.getMediaBox().getHeight());
             contentStream.beginText();
@@ -199,17 +219,18 @@ public class pdfHandler {
                         contentStream.newLineAtOffset(x, y);
                         contentStream.showText(text);
                         contentStream.newLineAtOffset(-x, -y);
+                    }
                 }
             }
-        }
 
-        contentStream.endText();
-        contentStream.close();
+            contentStream.endText();
+            contentStream.close();
         }
     }
 
-    private void saveDocument(PDDocument doc, String originalPath) throws IOException {
-        File outputPdfFile = new File("modified_" + new File(originalPath).getName());
+    private void saveDocument(PDDocument doc, String originalPath, String destPath) throws IOException {
+        String outputName = "modified_" + new File(originalPath).getName();
+        File outputPdfFile = new File(destPath, outputName);
         doc.save(outputPdfFile);
         System.out.println("Modified PDF saved successfully at: " + outputPdfFile.getAbsolutePath());
     }
