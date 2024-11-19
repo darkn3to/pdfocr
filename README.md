@@ -40,4 +40,4 @@ This application converts image-based PDFs into text-embedded PDFs using Tessera
 
 
 ## Packaged Binaries
-   You may download the application from the 'Release' tab.
+   You may download the application from the 'Releases' tab.
