@@ -11,33 +11,46 @@ This application converts image-based PDFs into text-embedded PDFs using Tessera
 • Multi-threading support for processing mutiple pages in parallel. 
 
 
-## Requirements
-• <b>JDK</b> 
+## Requirements / Dependencies
+• <b>JDK</b> - Java Development Kit.
 
-## Installation
-1. Open terminal.
+• <b>Tess4j</b> library for performing ocr.
 
-2. Clone the repository by using the command:
+• <b>Pdfbox</b> library for pdf manipulation.
+
+• <b>Gradle</b> - a build automation tool.
+
+
+## Usage
+1. Clone the repository by using the command:
    ```cmd
    git clone https://github.com/darkn3to/pdfocr.git
    ```
    or simply download the zip file from the code dropdown button above.
+   
+2. Navigate to the cloned directory.
 
-
-## Usage
-
-1. Navigate to the cloned directory.
-
-2. Run the command:
+3. Run the command:
     ```cmd
     ./gradlew clean shadowJar
     ```
 
-3. Run the jar file using:
+4. Run the jar file using:
     ```cmd
     java -jar app/build/libs/pdf_ocr-1.0-all.jar <source_file_path> <dest_file_path>
     ```
-
+    
+5. (Optional) One may also provide the 'm' flag as a third parameter to use the multi-threading funtionality.
+    ```cmd
+    java -jar app/build/libs/pdf_ocr-1.0-all.jar <source_file_path> <dest_file_path> m
+    ```
 
 ## Packaged Binaries
-   You may download the application from the 'Releases' tab.
+   You may download the application from the 'Releases' tab. The pdfocr.exe is a CLI-based application that can be executed by navigating to the directory having the .exe file and running:
+    ```
+    pdfocr <source_file_path> <dest_file_path>
+    ```
+    or 
+    ```
+    pdfocr <source_file_path> <dest_file_path> m
+    ``` .
