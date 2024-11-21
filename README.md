@@ -54,3 +54,6 @@ This application converts image-based PDFs into text-embedded PDFs using Tessera
     ```
     pdfocr <source_file_path> <dest_file_path> m
     ``` .
+
+### NOTE: 
+Please ensure that you have tessdata installed on C: drive or put it in the build/libs folder if you want to use your own tessdata with other languages included. Also ensure that you have opencv wrapper for java installed if you want to use image processing using opencv.
