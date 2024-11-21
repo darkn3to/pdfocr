@@ -41,7 +41,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 @Component
 public class pdfHandler {
     @Autowired 
-    private imageProc process;
+    private imageProc process;       // image processing not really working right now.
 
     private PDDocument newDoc;
 
@@ -52,10 +52,14 @@ public class pdfHandler {
     public pdfHandler() {
         inst = new Tesseract();
         inst.setDatapath("C:\\tessdata");
+        //inst.setDatapath("./tessdata");      //comment out the line above (and unocomment the current line) or ensure that you have C:\tessdata if you want to build an executable.
         inst.setTessVariable("tessedit_create_hocr", "1");
+        //inst.setTessVariable("tessedit_write_images", "1");
     }
 
     public void extractText(String path, String destPath, char useMultithreading) throws Exception {
+        System.out.println("Java Version: " + System.getProperty("java.version"));
+        System.out.println("Java Home: " + System.getProperty("java.home"));
         long startTime = System.currentTimeMillis();
         // PDDocument newDoc = null;
         final PDDocument doc;
@@ -182,7 +186,7 @@ public class pdfHandler {
             contentStream.beginText();
             contentStream.appendRawCommands("3 Tr ");
             contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
-            contentStream.setNonStrokingColor(new Color(0, 0, 0));
+            //contentStream.setNonStrokingColor(new Color(0, 0, 0));
 
             Document docHocr = Jsoup.parse(hocrData);
             Elements lines = docHocr.select(".ocr_line");
@@ -197,7 +201,7 @@ public class pdfHandler {
                     }
                 }
 
-                fontSize = (float) ((Float.parseFloat(xSize) * scaleY) * 0.95);
+                fontSize = (float) ((Float.parseFloat(xSize) * scaleY) * 0.92);
 
                 Elements words = line.select(".ocrx_word");
                 for (Element word : words) {
