@@ -1,6 +1,6 @@
 package org.example.app.components;
 
-import org.example.app.services.imageProc;
+//import org.example.app.services.imageProc;
 
 import java.io.File;
 import java.util.List;
@@ -19,7 +19,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
@@ -40,8 +40,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 @Component
 public class pdfHandler {
-    @Autowired 
-    private imageProc process;       // image processing not really working right now.
+    //@Autowired 
+    //private imageProc process;
 
     private PDDocument newDoc;
 
@@ -51,8 +51,7 @@ public class pdfHandler {
 
     public pdfHandler() {
         inst = new Tesseract();
-        inst.setDatapath("C:\\tessdata");
-        //inst.setDatapath("./tessdata");      //comment out the line above (and unocomment the current line) or ensure that you have C:\tessdata if you want to build an executable.
+        inst.setDatapath("./tessdata");
         inst.setTessVariable("tessedit_create_hocr", "1");
         //inst.setTessVariable("tessedit_write_images", "1");
     }
@@ -179,13 +178,15 @@ public class pdfHandler {
         ImageIO.write(image, "png", baos);
         byte[] imageBytes = baos.toByteArray();
 
+
         synchronized (newDoc) {
+        PDType0Font font = PDType0Font.load(newDoc, new File("DejaVuSans.ttf"));
             PDImageXObject pdImage = PDImageXObject.createFromByteArray(newDoc, imageBytes, "temp_image_" + i);
             PDPageContentStream contentStream = new PDPageContentStream(newDoc, newPage);
             contentStream.drawImage(pdImage, 0, 0, newPage.getMediaBox().getWidth(), newPage.getMediaBox().getHeight());
             contentStream.beginText();
             contentStream.appendRawCommands("3 Tr ");
-            contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+            contentStream.setFont(font, 12);
             //contentStream.setNonStrokingColor(new Color(0, 0, 0));
 
             Document docHocr = Jsoup.parse(hocrData);
@@ -219,7 +220,7 @@ public class pdfHandler {
                         float x = left * scaleX;
                         float y = (image.getHeight() - bottom) * scaleY;
 
-                        contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), fontSize);
+                        contentStream.setFont(font, fontSize);
                         contentStream.newLineAtOffset(x, y);
                         contentStream.showText(text);
                         contentStream.newLineAtOffset(-x, -y);
@@ -233,8 +234,12 @@ public class pdfHandler {
     }
 
     private void saveDocument(PDDocument doc, String originalPath, String destPath) throws IOException {
+        File destDir = new File(destPath).getAbsoluteFile();
+        if (destPath.equals(".")) {
+            destDir = new File(System.getProperty("user.dir"));
+        }
         String outputName = "modified_" + new File(originalPath).getName();
-        File outputPdfFile = new File(destPath, outputName);
+        File outputPdfFile = new File(destDir, outputName);
         doc.save(outputPdfFile);
         System.out.println("Modified PDF saved successfully at: " + outputPdfFile.getAbsolutePath());
     }
