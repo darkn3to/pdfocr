@@ -26,6 +26,14 @@ dependencies {
 
     implementation 'commons-io:commons-io:2.11.0'
 
+    // Test dependencies
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+}
+
+test {
+    useJUnitPlatform()
 }
 
 repositories {
